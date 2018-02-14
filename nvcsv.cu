@@ -9,18 +9,20 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <string.h>
 
 int main(int argc, char** argv) {
-	printf("NVCSV Version %.2f", NVCSV_VERSION);
+	std::cout << "NVCSV Version " <<  NVCSV_VERSION << std::endl;
 	if (argc == 1) {
-		printf("Usage: nvcsv [filename]\n");
-		printf("As of now, currently only runs through file listed to see how long it takes to process.\n");
+		std::cout << "Usage: nvcsv [filename]" << std::endl;
+		std::cout << "As of now, currently only runs through file listed to see how long it takes to process." << std::endl;
 		return 1;
 	}
+	std::string fileName(*(argv+1)); 
 	std::clock_t start1 = std::clock();
-	FILE* f = fopen("lineitem.tbl", "r" );
+	FILE* f = fopen(fileName.c_str(), "r" );
 	if (f == NULL) {
-		fprintf(stderr, "failed to open %s. Does file exist?", *(argv+1));
+		std::cout << "failed to open " <<  fileName << ". Does file exist?" << std::endl;
 		return 1;
 	}
 	fseek(f, 0, SEEK_END);
@@ -32,7 +34,7 @@ int main(int argc, char** argv) {
 	char *p;
 	int fd;
 
-	fd = open ("lineitem.tbl", O_RDONLY);
+	fd = open (fileName.c_str(), O_RDONLY);
 	if (fd == -1) {
 		perror ("open");
 		return 1;
@@ -44,7 +46,7 @@ int main(int argc, char** argv) {
 	}
 
 	if (!S_ISREG (sb.st_mode)) {
-		fprintf (stderr, "%s is not a file\n", "lineitem.tbl");
+		fprintf (stderr, "%s is not a file\n", "fileName");
 		return 1;
 	}
 
@@ -71,73 +73,23 @@ int main(int argc, char** argv) {
 	thrust::copy_if(thrust::make_counting_iterator((unsigned int)0), thrust::make_counting_iterator((unsigned int)fileSize),
 					dev.begin(), dev_pos.begin()+1, is_break());
 
-	thrust::device_vector<char> dev_res1(cnt*15);
-	thrust::fill(dev_res1.begin(), dev_res1.end(), 0);
-	thrust::device_vector<char> dev_res2(cnt*15);
-	thrust::fill(dev_res2.begin(), dev_res2.end(), 0);
-	thrust::device_vector<char> dev_res3(cnt*15);
-	thrust::fill(dev_res3.begin(), dev_res3.end(), 0);
-	thrust::device_vector<char> dev_res4(cnt*15);
-	thrust::fill(dev_res4.begin(), dev_res4.end(), 0);
-	thrust::device_vector<char> dev_res5(cnt*15);
-	thrust::fill(dev_res5.begin(), dev_res5.end(), 0);
-	thrust::device_vector<char> dev_res6(cnt*15);
-	thrust::fill(dev_res6.begin(), dev_res6.end(), 0);
-	thrust::device_vector<char> dev_res7(cnt*15);
-	thrust::fill(dev_res7.begin(), dev_res7.end(), 0);
-	thrust::device_vector<char> dev_res8(cnt*15);
-	thrust::fill(dev_res8.begin(), dev_res8.end(), 0);
-	thrust::device_vector<char> dev_res9(cnt);
-	thrust::fill(dev_res9.begin(), dev_res9.end(), 0);
-	thrust::device_vector<char> dev_res10(cnt);
-	thrust::fill(dev_res10.begin(), dev_res10.end(), 0);
-	thrust::device_vector<char> dev_res11(cnt*10);
-	thrust::fill(dev_res11.begin(), dev_res11.end(), 0);
+	thrust::device_vector<char> res(cnt*20);
+	thrust::fill(res.begin(), res.end(), 0);
 
-	thrust::device_vector<char*> dest(11);
-	dest[0] = thrust::raw_pointer_cast(dev_res1.data());
-	dest[1] = thrust::raw_pointer_cast(dev_res2.data());
-	dest[2] = thrust::raw_pointer_cast(dev_res3.data());
-	dest[3] = thrust::raw_pointer_cast(dev_res4.data());
-	dest[4] = thrust::raw_pointer_cast(dev_res5.data());
-	dest[5] = thrust::raw_pointer_cast(dev_res6.data());
-	dest[6] = thrust::raw_pointer_cast(dev_res7.data());
-	dest[7] = thrust::raw_pointer_cast(dev_res8.data());
-	dest[8] = thrust::raw_pointer_cast(dev_res9.data());
-	dest[9] = thrust::raw_pointer_cast(dev_res10.data());
-	dest[10] = thrust::raw_pointer_cast(dev_res11.data());
+	thrust::device_vector<char*> dest(1);
+	dest[0] = thrust::raw_pointer_cast(res.data());
 
-	thrust::device_vector<unsigned int> ind(11); //fields positions
-	ind[0] = 0;
-	ind[1] = 1;
-	ind[2] = 2;
-	ind[3] = 3;
-	ind[4] = 4;
-	ind[5] = 5;
-	ind[6] = 6;
-	ind[7] = 7;
-	ind[8] = 8;
-	ind[9] = 9;
-	ind[10] = 10;
+	thrust::device_vector<unsigned int> ind(1); //fields positions
+	ind[0] = 5;
 
-	thrust::device_vector<unsigned int> dest_len(11); //fields max lengths
-	dest_len[0] = 15;
-	dest_len[1] = 15;
-	dest_len[2] = 15;
-	dest_len[3] = 15;
-	dest_len[4] = 15;
-	dest_len[5] = 15;
-	dest_len[6] = 15;
-	dest_len[7] = 15;
-	dest_len[8] = 1;
-	dest_len[9] = 1;
-	dest_len[10] = 10;
+	thrust::device_vector<unsigned int> dest_len(1); //fields max lengths
+	dest_len[0] = 20;
 
 	thrust::device_vector<unsigned int> ind_cnt(1); //fields count
 	ind_cnt[0] = 10;
 
 	thrust::device_vector<char> sep(1);
-	sep[0] = '|';
+	sep[0] = ',';
 
 	thrust::counting_iterator<unsigned int> begin(0);
 	parse_functor ff((const char*)thrust::raw_pointer_cast(dev.data()),(char**)thrust::raw_pointer_cast(dest.data()), thrust::raw_pointer_cast(ind.data()),
@@ -146,37 +98,15 @@ int main(int argc, char** argv) {
 
 	std::cout<< "time0 " <<  ( ( std::clock() - start1 ) / (double)CLOCKS_PER_SEC ) << '\n';
 	
-	thrust::device_vector<long long int> d_int(cnt);
 	thrust::device_vector<double> d_float(cnt);
-	
-	//check the text results in dev_res array :
-	for(int i = 0; i < 100; i++)
-		std::cout << dev_res9[i];
-	std ::cout << std::endl;
 
-	for(int i = 0; i < 100; i++)
-		std::cout << dev_res10[i];
-	std ::cout << std::endl;
-
-	//binary integer results
-	ind_cnt[0] = 15;
-	gpu_atoll atoll_ff((const char*)thrust::raw_pointer_cast(dev_res3.data()),(long long int*)thrust::raw_pointer_cast(d_int.data()),
-					   thrust::raw_pointer_cast(ind_cnt.data()));
-	thrust::for_each(begin, begin + cnt, atoll_ff);
-
-	for(int i = 0; i < 10; i++)
-		std::cout << d_int[i] << std::endl;
-
-	std::cout <<  std::endl;
-
-	//binary float results
-	gpu_atof atof_ff((const char*)thrust::raw_pointer_cast(dev_res6.data()),(double*)thrust::raw_pointer_cast(d_float.data()),
+	gpu_atof atof_ff((const char*)thrust::raw_pointer_cast(res.data()),(double*)thrust::raw_pointer_cast(d_float.data()),
 					 thrust::raw_pointer_cast(ind_cnt.data()));
 	thrust::for_each(begin, begin + cnt, atof_ff);
 
 	std::cout.precision(10);
 	for(int i = 0; i < 10; i++)
-		std::cout << d_int[i] << std::endl;
+		std::cout << d_float[i] << std::endl;
 
 	return 0;
 
