@@ -53,7 +53,7 @@ struct gpu_atof {
 		
 		p = source + len[0]*i;		
 		
-		while (*p == ' ') {
+		while (*p == ' ' ) {
 			p += 1;
 		}
 	
