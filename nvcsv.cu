@@ -19,6 +19,10 @@
 #include <string.h>
 #include <limits.h>
 
+#define OFFSET 100000
+
+int parseCSV(std::string, int, int);
+
 void msg(std::string m) {
 	std::cout << m << std::endl;
 }
@@ -26,6 +30,8 @@ void msg(std::string m) {
 int main(int argc, char** argv) {
 	// TODO: replace most std::cout statements with msg()
 	std::cout << "NVCSV Version " <<  NVCSV_VERSION << std::endl;
+	msg("Initializing CUDA context...");
+	cudaFree(0);
 	if (argc < 4) {
 		std::cout << "Currently only supports grabbing data from a column of a CSV file." << std::endl;
 		std::cout << "Usage: nvcsv [filename] [index] [field max length]" << std::endl;
@@ -41,23 +47,25 @@ int main(int argc, char** argv) {
 		msg("Error: max length must be > 0. Aborting...");
 		return -1;
 	}
-	std::string fileName(*(argv+1)); 
+	std::string fileName(*(argv+1)); 	
+	parseCSV(fileName, iC, dI);
+	exit(0);
+}
+
+int parseCSV(std::string _fileName, int maxLength, int parseIndex) {
+	int iC = maxLength;
+	int dI = parseIndex;
+	std::string fileName = _fileName;
 	std::clock_t start1 = std::clock();
 	FILE* f = fopen(fileName.c_str(), "r" );
-	if (f == NULL) {
-		std::cout << "Error: Failed to open " <<  fileName << ". Does file exist? Aborting..." << std::endl;
-		return -1;
-	}
 	std::cout << "Determining size of " << fileName << "..." << std::endl;
 	fseek(f, 0, SEEK_END);
 	struct stat st;
 	stat(fileName.c_str(), &st);	
 	long long fileSize = st.st_size; 
-	thrust::device_vector<char> dev(fileSize); // the vector representing the
-						   // file's data on the GPU's memory
 	std::cout << "File size is " << fileSize << "." << std::endl;
 	fclose(f);
-	
+
 	struct stat sb;
 	char *p;
 	int fd;
@@ -76,7 +84,7 @@ int main(int argc, char** argv) {
 	if (!S_ISREG (sb.st_mode)) {
 		fprintf (stderr, "%s is not a file\n", "fileName");
 		return 1;
-	}
+	}	
 
 	p = (char*)mmap (0, fileSize, PROT_READ, MAP_SHARED, fd, 0);
 
@@ -90,16 +98,33 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-
+	if (fileSize >= INT_MAX) {
+		msg("File size >= INT_MAX. Splitting CSV file...");
+		// jump to INT MAX. go backwards until new line.
+		FILE* fd2 = fopen(fileName.c_str(), "r" );	
+		fileSize = INT_MAX-OFFSET;
+		fseek(fd2, fileSize, SEEK_SET);
+		char t = fgetc(fd2);
+		while (t != '\n') {
+			fileSize--;
+			fseek(fd2, fileSize, SEEK_SET);
+			t = fgetc(fd2);
+		}	
+		fclose(fd2);
+	}
+	std::cout << "New file size: " << fileSize << std::endl;
+	thrust::device_vector<char> dev(fileSize); // the vector representing the
+						   // file's data on the GPU's memory
 	std::cout << "Copying file to GPU (this may take a while)..." << std::endl;
 	thrust::copy(p, p+fileSize, dev.begin());
 	msg("Successful copy to GPU.");
 	std::cout << "Counting lines..." << std::endl;
-	long long cnt = thrust::count(dev.begin(), dev.end(), '\n'); // count the new lines in the file
-	std::cout << "There are " << cnt << " total lines in the file." << std::endl;
+	thrust::device_vector<unsigned long long int> cnt(1);
+	cnt[0] = thrust::count(thrust::device, dev.begin(), dev.end(), '\n'); // count the new lines in the file
+	std::cout << "There are " << cnt[0] << " total lines in the file." << std::endl;
 
 	// find all new lines
-	thrust::device_vector<int> devPos(cnt+1);
+	thrust::device_vector<int> devPos(cnt[0]+1);
 	devPos[0] = -1;
 	
 	std::cout << "Creating device_vector of newlines..." << std::endl;
@@ -107,7 +132,7 @@ int main(int argc, char** argv) {
 		dev.begin(), devPos.begin()+1, is_break());
 	
 	std::cout << "Creating value arrays..." << std::endl;
-	thrust::device_vector<char> vals(cnt*25); // where we'll store our values
+	thrust::device_vector<char> vals(cnt[0]*25); // where we'll store our values
 	thrust::fill(vals.begin(), vals.end(), ' '); // pad whole vector with zeros
 
 	msg("Establushing destination pointer...");
@@ -132,15 +157,15 @@ int main(int argc, char** argv) {
 	thrust::counting_iterator<unsigned int> begin(0);
 	parse_functor ff((const char*)thrust::raw_pointer_cast(dev.data()),(char**)thrust::raw_pointer_cast(dest.data()), thrust::raw_pointer_cast(index.data()),
 		thrust::raw_pointer_cast(indexCount.data()), thrust::raw_pointer_cast(seperator.data()), thrust::raw_pointer_cast(devPos.data()), thrust::raw_pointer_cast(destLen.data()));
-	thrust::for_each(begin, begin+cnt, ff);
+	thrust::for_each(begin, begin + cnt[0], ff);
 	msg("Successful parse.");
-	thrust::device_vector<double> d_float(cnt);
+	thrust::device_vector<double> d_float(cnt[0]);
 	
 	std::cout << "gpu_atof on wanted data..." << std::endl;
 	indexCount[0] = iC;
 	gpu_atof atof_ff((const char*)thrust::raw_pointer_cast(vals.data()),(double*)thrust::raw_pointer_cast(d_float.data()),
 			thrust::raw_pointer_cast(indexCount.data()));
-	thrust::for_each(begin, begin + cnt, atof_ff);
+	thrust::for_each(begin, begin + cnt[0], atof_ff);
 	msg("Successful gpu_atof.");
 
 	msg("Here are the first 10 entries of your desired column:");
@@ -149,6 +174,4 @@ int main(int argc, char** argv) {
 		std::cout << d_float[i] << std::endl;
 	}
 	msg("Cleaning...");
-	// TODO: clean tasks?
-	std::cout << "Terminating NVCSV..." << std::endl;
 }
