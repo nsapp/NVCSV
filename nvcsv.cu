@@ -33,10 +33,10 @@ int main(int argc, char** argv) {
 	std::cout << "NVCSV Version " <<  NVCSV_VERSION << std::endl;
 	msg("Initializing CUDA context...");
 	cudaFree(0);	// this is a shorthand which initializes the CUDA context
-		    	// normally the CUDA context will initialate on the first CUDA command
+		    	// normally the CUDA context will initialize on the first CUDA command
 	if (argc < 4) { // if our arguments are insufficient
-		std::cout << "Currently only supports grabbing data from a column of a CSV file." << std::endl;
-		std::cout << "Usage: nvcsv [filename] [index] [field max length]" << std::endl;
+		msg("Currently only supports grabbing data from a column of a CSV file.");
+		msg("Usage: nvcsv [filename] [index] [field max length]");
 		return 1;
 	}
 	/*
@@ -146,10 +146,10 @@ int parseCSV(std::string _fileName, int _maxLength, int _parseIndex) {
 	std::cout << "New file size: " << fileSize << std::endl;
 	thrust::device_vector<char> dev(fileSize); // the vector representing the
 						   // file's data on the GPU's memory
-	std::cout << "Copying file to GPU (this may take a while)..." << std::endl;
+	msg("Copying file to GPU (this may take a while)...");
 	thrust::copy(p, p+fileSize, dev.begin());
 	msg("Successful copy to GPU.");
-	std::cout << "Counting lines..." << std::endl;
+	msg("Counting lines...");
 	thrust::device_vector<unsigned long long int> cnt(1);
 	cnt[0] = thrust::count(thrust::device, dev.begin(), dev.end(), '\n'); // count the new lines in the file
 	std::cout << "There are " << cnt[0] << " total lines in the file." << std::endl;
@@ -163,15 +163,15 @@ int parseCSV(std::string _fileName, int _maxLength, int _parseIndex) {
 	thrust::device_vector<int> devPos(cnt[0]+1);
 	devPos[0] = -1;
 	
-	std::cout << "Creating device_vector of newlines..." << std::endl;
+	msg("Creating device_vector of newlines...");
 	thrust::copy_if(thrust::make_counting_iterator((unsigned int)0), thrust::make_counting_iterator((unsigned int)fileSize),
 		dev.begin(), devPos.begin()+1, is_break());
 	
-	std::cout << "Creating value arrays..." << std::endl;
+	msg("Creating value arrays...");
 	thrust::device_vector<char> vals(cnt[0]*25); // where we'll store our values
 	thrust::fill(vals.begin(), vals.end(), ' '); // pad whole vector with zeros
 
-	msg("Establushing destination pointer...");
+	msg("Establishing destination pointer...");
 	thrust::device_vector<char*> dest(1);
 	dest[0] = thrust::raw_pointer_cast(vals.data()); // destination pointer
 
@@ -189,7 +189,7 @@ int parseCSV(std::string _fileName, int _maxLength, int _parseIndex) {
 	thrust::device_vector<char> seperator(1);
 	seperator[0] = ',';
 
-	std::cout << "Parsing column..." << std::endl;
+	msg("Parsing column...");
 	thrust::counting_iterator<unsigned int> begin(0);
 	parse_functor ff((const char*)thrust::raw_pointer_cast(dev.data()),(char**)thrust::raw_pointer_cast(dest.data()), thrust::raw_pointer_cast(index.data()),
 		thrust::raw_pointer_cast(indexCount.data()), thrust::raw_pointer_cast(seperator.data()), thrust::raw_pointer_cast(devPos.data()), thrust::raw_pointer_cast(destLen.data()));
@@ -197,7 +197,7 @@ int parseCSV(std::string _fileName, int _maxLength, int _parseIndex) {
 	msg("Successful parse.");
 	thrust::device_vector<double> d_float(cnt[0]);
 	
-	std::cout << "gpu_atof on wanted data..." << std::endl;
+	msg("gpu_atof on wanted data...");
 	indexCount[0] = maxLength;
 	gpu_atof atof_ff((const char*)thrust::raw_pointer_cast(vals.data()),(double*)thrust::raw_pointer_cast(d_float.data()),
 			thrust::raw_pointer_cast(indexCount.data()));
