@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
 	    }
     }
     else {
-	    msg("Error.");-
+	    msg("Error.");
 	}
 	exit(0);	// return
 }
