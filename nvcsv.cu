@@ -29,7 +29,6 @@ void msg(std::string m) {
 }
 
 int main(int argc, char** argv) {
-	// TODO: replace most std::cout statements with msg()
 	std::cout << "NVCSV Version " <<  NVCSV_VERSION << std::endl;
 	msg("Initializing CUDA context...");
 	cudaFree(0);	// this is a shorthand which initializes the CUDA context
@@ -56,7 +55,21 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 	std::string fileName(*(argv+1));
-	parseCSV(fileName, fieldMaxLength, index);	// parse the csv
+	struct stat s;
+	if (stat(path,&s)==0) {
+	    if (s.st_mode & S_IFDIR) {
+	        msg("This is a directory, not a file. Functionality for parsing directories coming soon");
+	    }
+	    else if (s.st_mode & S_IFREG) {
+            parseCSV(fileName, fieldMaxLength, index);    // parse the csv
+        }
+        else {
+	        msg("What did you even just give me?");
+	    }
+    }
+    else {
+	    msg("Error.");-
+	}
 	exit(0);	// return
 }
 
